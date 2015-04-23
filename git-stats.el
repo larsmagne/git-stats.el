@@ -29,13 +29,14 @@
   (interactive "DGit directory to get logs for: ")
   (git-stats-output (git-stats-compute dir)))
 
-(defun git-stats-output (authors)
+(defun git-stats-output (authors &optional commits)
   (let ((monthly (make-hash-table :test 'equal))
 	totals)
     (maphash
-     (lambda (key _)
+     (lambda (key count)
        (incf (gethash (cons (car key) (cadr key))
-		      monthly 0)))
+		      monthly 0)
+	     (if commits count 1)))
      authors)
     (maphash
      (lambda (key count)
