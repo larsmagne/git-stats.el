@@ -51,21 +51,30 @@
 			  (string< (car e1) (car e2)))))
       (insert (format "%s %d\n" (car elem) (cdr elem))))))
 
-(defun git-stats-compute (dir)
+(defun git-stats-compute (dir &optional committer)
   (let ((default-directory dir)
 	(case-fold-search t)
 	(authors (make-hash-table :test 'equal)))
     (with-temp-buffer
-      (call-process "git" nil t nil "log")
+      (if committer
+	  (call-process "git" nil t nil "log" "--pretty=fuller")
+	(call-process "git" nil t nil "log"))
       (goto-char (point-min))
       (while (re-search-forward "^commit " nil t)
 	(forward-line 1)
 	(let (author date)
 	  (while (not (eq (following-char) ?\n))
 	    (cond
-	     ((looking-at "author:[ \t]+\\(.*\\)")
+	     ((or (and (not committer)
+		       (looking-at "author:[ \t]+\\(.*\\)"))
+		  (and committer
+		       (looking-at "commit:[ \t]+\\(.*\\)")))
 	      (setq author (match-string 1)))
-	     ((looking-at "date:[ \t]+\\(.*\\)")
+	     ((and (not committer)
+		   (looking-at "date:[ \t]+\\(.*\\)"))
+	      (setq date (match-string 1)))
+	     ((and committer
+		   (looking-at "commitdate:[ \t]+\\(.*\\)"))
 	      (setq date (match-string 1))))
 	    (forward-line 1))
 	  (when (and author date)
