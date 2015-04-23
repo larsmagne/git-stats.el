@@ -27,10 +27,33 @@
 (defun git-stats (dir)
   "Tally up commits per author per month in DIR."
   (interactive "DGit directory to get logs for: ")
+  (git-stats-output (git-stats-compute dir)))
+
+(defun git-stats-output (authors)
+  (let ((monthly (make-hash-table :test 'equal))
+	totals)
+    (maphash
+     (lambda (key _)
+       (incf (gethash (cons (car key) (cadr key))
+		      monthly 0)))
+     authors)
+    (maphash
+     (lambda (key count)
+       (push (cons (format "%04d-%02d-01" (car key) (cdr key))
+		   count)
+	     totals))
+     monthly)
+    (pop-to-buffer "*totals*")
+    (erase-buffer)
+    (dolist (elem (sort totals
+			(lambda (e1 e2)
+			  (string< (car e1) (car e2)))))
+      (insert (format "%s %d\n" (car elem) (cdr elem))))))
+
+(defun git-stats-compute (dir)
   (let ((default-directory dir)
 	(case-fold-search t)
-	(prev-month -1)
-	authors totals)
+	(authors (make-hash-table :test 'equal)))
     (with-temp-buffer
       (call-process "git" nil t nil "log")
       (goto-char (point-min))
@@ -45,24 +68,11 @@
 	      (setq date (match-string 1))))
 	    (forward-line 1))
 	  (when (and author date)
-	    (setq author (car (mail-header-parse-address author))
-		  date (parse-time-string date))
-	    (when (or (not (= prev-month (nth 4 date)))
-		      (not (save-excursion
-			     (search-forward "\ncommit " nil t))))
-	      (when authors
-		(push (cons (format-time-string "%Y-%d-01"
-						(apply 'encode-time date))
-			    (hash-table-count authors))
-		      totals))
-	      (setq authors (make-hash-table :test 'equal)
-		    prev-month (nth 4 date)))
-	    (incf (gethash author authors 0))))))
-    (pop-to-buffer "*totals*")
-    (erase-buffer)
-    (dolist (elem (nreverse totals))
-      (insert (format "%s %d\n" (car elem) (cdr elem))))))
-		      
+	    (setq date (parse-time-string date))
+	    (incf (gethash (list (nth 5 date) (nth 4 date)
+				 (car (mail-header-parse-address author)))
+			   authors 0))))))
+    authors))
 
 (provide 'git-stats)
 
