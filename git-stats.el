@@ -27,33 +27,55 @@
 (defun git-stats (dir)
   "Tally up commits per author per month in DIR."
   (interactive "DGit directory to get logs for: ")
-  (git-stats-output (git-stats-compute dir)))
+  (git-stats-output (setq stats (git-stats-compute dir)) t t))
 
-(defun git-stats-output (authors &optional commits)
-  (let ((monthly (make-hash-table :test 'equal))
+(defun git-stats-output (authors &optional commits smalls)
+  (let ((monthly (make-hash-table :test #'equal))
 	totals)
     (maphash
      (lambda (key count)
-       (incf (gethash (cons (car key) (cadr key))
-		      monthly 0)
-	     (if commits count 1)))
+       (let ((time (car key))
+	     (total 0))
+	 (when (and (not (string-match "corallo" (cadr key)))
+		    (not (string-match "akrl" (cadr key))))
+	   (dotimes (i 28)
+	     (setq time (+ time (* i 24 60 60)))
+	     (incf total (gethash (list time (cadr key))
+				  authors
+				  0)))
+	   (setq time (car key))
+	   (when (or (not smalls)
+		     (< total 2))
+	     (dotimes (i 28)
+	       (setq time (+ time (* i 24 60 60)))
+	       (when (<= time (time-convert nil 'integer))
+		 (incf (gethash time monthly 0)
+		       (if commits count 1))))))))
      authors)
     (maphash
      (lambda (key count)
-       (push (cons (format "%04d-%02d-01" (car key) (cdr key))
+       (push (cons (format-time-string "%Y-%m-%d" key "Z")
 		   count)
 	     totals))
      monthly)
     (pop-to-buffer "*totals*")
     (erase-buffer)
-    (dolist (elem (sort totals
-			(lambda (e1 e2)
-			  (string< (car e1) (car e2)))))
-      (insert (format "%s %d\n" (car elem) (cdr elem))))))
+    (let ((data (sort totals
+		      (lambda (e1 e2)
+			(string< (car e1) (car e2)))))
+	  (len 28)
+	  elem)
+      (while (setq elem (car data))
+	(when (length> data len)
+	  (insert (format "%s %d\n" (car elem)
+			  (/ (reduce #'+ (mapcar #'cdr (seq-take data len)))
+			     (float len)))))
+	(pop data)))))
 
 (defun git-stats-compute (dir &optional committer)
   (let ((default-directory dir)
 	(case-fold-search t)
+	merge
 	(authors (make-hash-table :test 'equal)))
     (with-temp-buffer
       (if committer
@@ -65,21 +87,29 @@
 	(let (author date)
 	  (while (not (eq (following-char) ?\n))
 	    (cond
+	     ((looking-at "Merge:")
+	      (setq merge t))
 	     ((or (and (not committer)
 		       (looking-at "author:[ \t]+\\(.*\\)"))
 		  (and committer
 		       (looking-at "commit:[ \t]+\\(.*\\)")))
-	      (setq author (match-string 1)))
-	     ((and (not committer)
-		   (looking-at "date:[ \t]+\\(.*\\)"))
-	      (setq date (match-string 1)))
-	     ((and committer
-		   (looking-at "commitdate:[ \t]+\\(.*\\)"))
+	      (setq author (match-string 1))
+	      (when merge
+		(setq author nil
+		      merge nil)))
+	     ((looking-at "commitdate:[ \t]+\\(.*\\)")
 	      (setq date (match-string 1))))
 	    (forward-line 1))
 	  (when (and author date)
 	    (setq date (parse-time-string date))
-	    (incf (gethash (list (nth 5 date) (nth 4 date)
+	    (incf (gethash (list (time-convert
+				  (encode-time
+				   (decoded-time-set-defaults
+				    (make-decoded-time :year (nth 5 date)
+						       :month (nth 4 date)
+						       :day (nth 3 date)
+						       :zone "Z")))
+				  'integer)
 				 (car (mail-header-parse-address author)))
 			   authors 0))))))
     authors))
