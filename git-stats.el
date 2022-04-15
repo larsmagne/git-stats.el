@@ -40,17 +40,17 @@
 		    (not (string-match "akrl" (cadr key))))
 	   (dotimes (i 28)
 	     (setq time (+ time (* i 24 60 60)))
-	     (incf total (gethash (list time (cadr key))
-				  authors
-				  0)))
+	     (cl-incf total (gethash (list time (cadr key))
+				     authors
+				     0)))
 	   (setq time (car key))
 	   (when (or (not smalls)
 		     (< total 2))
 	     (dotimes (i 28)
 	       (setq time (+ time (* i 24 60 60)))
 	       (when (<= time (time-convert nil 'integer))
-		 (incf (gethash time monthly 0)
-		       (if commits count 1))))))))
+		 (cl-incf (gethash time monthly 0)
+			  (if commits count 1))))))))
      authors)
     (maphash
      (lambda (key count)
@@ -102,16 +102,16 @@
 	    (forward-line 1))
 	  (when (and author date)
 	    (setq date (parse-time-string date))
-	    (incf (gethash (list (time-convert
-				  (encode-time
-				   (decoded-time-set-defaults
-				    (make-decoded-time :year (nth 5 date)
-						       :month (nth 4 date)
-						       :day (nth 3 date)
-						       :zone "Z")))
-				  'integer)
-				 (car (mail-header-parse-address author)))
-			   authors 0))))))
+	    (cl-incf (gethash (list (time-convert
+				     (encode-time
+				      (decoded-time-set-defaults
+				       (make-decoded-time :year (nth 5 date)
+							  :month (nth 4 date)
+							  :day (nth 3 date)
+							  :zone "Z")))
+				     'integer)
+				    (car (mail-header-parse-address author)))
+			      authors 0))))))
     authors))
 
 (provide 'git-stats)
